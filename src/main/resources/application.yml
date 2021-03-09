@@ -1,0 +1,32 @@
+# Server port
+server:
+  port: 8081
+
+#Twitter API token
+twitter:
+  token: Bearer AAAAAAAAAAAAAAAAAAAAAHOIGwEAAAAAt9Ctcufkj8FosfAre6wKSEIwlZc%3DfQyfAYWJejFSGAhXsUKtI2NakBxxx2rCDs52PN94NbWjYJXkaO
+
+#KAFKA CONFIGURATION
+spring:
+  kafka:
+    bootstrap-servers: rocket-01.srvs.cloudkafka.com:9094,rocket-02.srvs.cloudkafka.com:9094,rocket-03.srvs.cloudkafka.com:9094
+    properties:
+      security:
+        protocol: SASL_SSL
+      sasl:
+        mechanism: SCRAM-SHA-256
+        jaas:
+          config: org.apache.kafka.common.security.scram.ScramLoginModule required username="ytlg5n1a" password="e_1CGGDmDMOLVMddqkYYVFeuGDbj6QsP";
+    consumer:
+      #solo para el cloudrafka
+      group-id: ytlg5n1a-consumers
+      auto-offset-reset: latest
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+#solo para el cloudkarafka
+cloudkarafka:
+  topic: ytlg5n1a-default
+
+
