@@ -24,6 +24,18 @@ public class StreamController {
     @Autowired
     private StreamService streamService;
 
+    @GetMapping("/status")
+    public ResponseEntity<ServiceResponse> streamStatus() {
+        log.info("Stream Status Request");
+        ServiceResponse response = streamService.startTwitterStreaming();
+        log.info("Stream Status Response: {}", response);
+        if (response.getCode() < 0) {
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        } else {
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        }
+    }
+
     @GetMapping("/start")
     public ResponseEntity<ServiceResponse> startStream() {
         log.info("Start Stream Request");

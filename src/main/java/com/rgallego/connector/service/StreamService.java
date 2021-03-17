@@ -24,6 +24,16 @@ public class StreamService {
     @Autowired
     private Producer kafkaProducer;
 
+    public ServiceResponse streamStatus(){
+        ServiceResponse response = new ServiceResponse();
+        if(isStreamingStarted()) {
+            response.setResponse(ResponseCodeEnum.STREAM_STATUS_STARTED);
+        } else {
+            response.setResponse(ResponseCodeEnum.STREAM_STATUS_STOPPED);
+        }
+        return response;
+    }
+
     public ServiceResponse startTwitterStreaming() {
         ServiceResponse serviceResponse = new ServiceResponse();
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
