@@ -8,9 +8,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @Slf4j
@@ -25,31 +29,31 @@ public class StreamService {
     private Producer kafkaProducer;
 
     public ServiceResponse streamStatus(){
-        ServiceResponse response = new ServiceResponse();
         if(isStreamingStarted()) {
-            response.setResponse(ResponseCodeEnum.STREAM_STATUS_STARTED);
+            return new ServiceResponse(ResponseCodeEnum.STREAM_STATUS_STARTED);
         } else {
-            response.setResponse(ResponseCodeEnum.STREAM_STATUS_STOPPED);
+            return new ServiceResponse(ResponseCodeEnum.STREAM_STATUS_STOPPED);
         }
-        return response;
     }
 
     public ServiceResponse startTwitterStreaming() {
-        ServiceResponse serviceResponse = new ServiceResponse();
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+//        https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/get-tweets-search-stream
         params.add("expansions", "author_id,geo.place_id");
-        params.add("tweet.fields", "created_at");//entities,context_annotations
+        params.add("tweet.fields", "created_at,context_annotations,entities,geo");
+        params.add("user.fields", "location");
+        params.add("place.fields", "full_name,country,geo,name,place_type");
 
         Flux<String> tweetsFlux = twitterRestConnector.getSearchStreaming(params);
         if (isStreamingStarted()) {
-            serviceResponse.setResponse(ResponseCodeEnum.ERR_ALREADY_OPEN_STREAM);
+            return new ServiceResponse(ResponseCodeEnum.ERR_ALREADY_OPEN_STREAM);
         } else {
             log.debug("Starting streaming...");
-            openStream = tweetsFlux.subscribe(kafkaProducer::send);
-            serviceResponse.setResponse(ResponseCodeEnum.SUC_OPEN_STREAM);
+            openStream = tweetsFlux.subscribe(kafkaProducer::send, ex -> {
+                log.error("Error body: {}", ((WebClientResponseException.BadRequest) ex).getResponseBodyAsString());
+            });
+            return new ServiceResponse(ResponseCodeEnum.SUC_OPEN_STREAM);
         }
-
-        return serviceResponse;
     }
 
     private void processTweet(String tweet) {
@@ -57,15 +61,13 @@ public class StreamService {
     }
 
     public ServiceResponse stopTwitterStreaming() {
-        ServiceResponse serviceResponse = new ServiceResponse();
         if (isStreamingStarted()) {
             openStream.dispose();
             openStream = null;
-            serviceResponse.setResponse(ResponseCodeEnum.SUC_STREAM_STOPPED);
+            return new ServiceResponse(ResponseCodeEnum.SUC_STREAM_STOPPED);
         } else {
-            serviceResponse.setResponse(ResponseCodeEnum.ERR_STREAM_NOT_EXIST);
+            return new ServiceResponse(ResponseCodeEnum.ERR_STREAM_NOT_EXIST);
         }
-        return serviceResponse;
     }
 
     public boolean isStreamingStarted() {
@@ -85,25 +87,38 @@ public class StreamService {
      * 512 characters long
      * @return
      */
-    public Mono<RulesResponse> createStreamingRules(RulesRequest rulesRequest) {
-        return twitterRestConnector.createStreamingRules(rulesRequest, false);
-    }
-
-    /**
-     * Validate Streaming rules without submit them.
-     * @param rulesRequest
-     * @return
-     */
-    public Mono<RulesResponse> validateStreamingRules(RulesRequest rulesRequest) {
-        return twitterRestConnector.createStreamingRules(rulesRequest, true);
+    public Mono<ServiceResponse> createStreamingRules(Rule rule) {
+        List<Rule> rules = new ArrayList<>();
+        rules.add(rule);
+        RulesRequest rulesRequest = new RulesRequest();
+        rulesRequest.setAdd(rules);
+        Mono<RulesResponse> apiResponse = twitterRestConnector.createStreamingRules(rulesRequest);
+        return apiResponse.map(response -> {
+            log.debug("Create Rule Twitter Response: {}", response);
+            if(response.getMeta().getSummary().getNot_created() > 0 && !response.getErrors().isEmpty()) {
+                String details;
+                if(response.getErrors().get(0).getDetails().isEmpty()) {
+                    details = response.getErrors().get(0).getTitle();
+                } else {
+                    details = response.getErrors().get(0).getDetails().toString();
+                }
+                return new ServiceResponse(ResponseCodeEnum.CREATE_RULE_ERROR,details);
+            } else {
+                return new ServiceResponse(ResponseCodeEnum.CREATE_RULE_SUCCESS);
+            }
+        });
     }
 
     /**
      * Delete streaming rules
-     * @param rulesRequest
+     * @param ruleId
      * @return
      */
-    public Mono<RulesResponse> deleteStreamingRules(RulesRequest rulesRequest) {
+    public Mono<RulesResponse> deleteStreamingRules(String ruleId) {
+        List<String> ruleIdList = new ArrayList<>();
+        ruleIdList.add(ruleId);
+        RulesRequest rulesRequest = new RulesRequest();
+        rulesRequest.setDelete(new DeleteRule(ruleIdList));
         return twitterRestConnector.deleteStreamRules(rulesRequest);
     }
 

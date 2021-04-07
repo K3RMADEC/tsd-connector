@@ -73,14 +73,12 @@ public class TwitterRestConnector {
      * Create or delete rule/s for the streaming.
      * Allows 25 rules, each one up to 512 characters long.
      *
-     * Set validateRules to true to test a the syntax of your rule without submitting it.
      */
-    public Mono<RulesResponse> createStreamingRules(RulesRequest rules, boolean validateRules) {
+    public Mono<RulesResponse> createStreamingRules(RulesRequest rules) {
 
         return this.webClient.method(HttpMethod.POST)
                 .uri(uriBuilder -> uriBuilder
                         .path("/2/tweets/search/stream/rules")
-                        .queryParam("dry_run", validateRules)
                         .build())
                 .body(BodyInserters.fromValue(rules))
                 .retrieve()

@@ -7,6 +7,7 @@ import lombok.*;
 @Getter
 @Setter
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@ToString
 public class Rule {
     /**
      * Used only for responses
