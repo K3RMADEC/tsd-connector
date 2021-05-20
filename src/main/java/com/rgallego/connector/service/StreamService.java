@@ -5,6 +5,8 @@ import com.rgallego.connector.connector.bean.*;
 import com.rgallego.connector.kafka.Producer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -18,7 +20,12 @@ import java.util.List;
 
 @Service
 @Slf4j
+@EnableScheduling
 public class StreamService {
+
+    private final int STREAM_OPENED = 0;
+    private final int STREAM_CLOSED = 1;
+    private final int STREAM_INTERRUPTED = 2;
 
     private Disposable openStream;
 
@@ -28,26 +35,18 @@ public class StreamService {
     @Autowired
     private Producer kafkaProducer;
 
-    public ServiceResponse streamStatus(){
-        if(isStreamingStarted()) {
-            return new ServiceResponse(ResponseCodeEnum.STREAM_STATUS_STARTED);
-        } else {
-            return new ServiceResponse(ResponseCodeEnum.STREAM_STATUS_STOPPED);
-        }
-    }
-
     public ServiceResponse startTwitterStreaming() {
-        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-//        https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/get-tweets-search-stream
-        params.add("expansions", "author_id,geo.place_id");
-        params.add("tweet.fields", "created_at,context_annotations,entities,geo");
-        params.add("user.fields", "location");
-        params.add("place.fields", "full_name,country,geo,name,place_type");
-
-        Flux<String> tweetsFlux = twitterRestConnector.getSearchStreaming(params);
-        if (isStreamingStarted()) {
+        if (STREAM_OPENED == getStreamStatus()) {
             return new ServiceResponse(ResponseCodeEnum.ERR_ALREADY_OPEN_STREAM);
         } else {
+            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+//        https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/get-tweets-search-stream
+            params.add("expansions", "author_id,geo.place_id");
+            params.add("tweet.fields", "created_at,context_annotations,entities,geo");
+            params.add("user.fields", "location");
+            params.add("place.fields", "full_name,country,geo,name,place_type");
+
+            Flux<String> tweetsFlux = twitterRestConnector.getSearchStreaming(params);
             log.debug("Starting streaming...");
             openStream = tweetsFlux.subscribe(kafkaProducer::send, ex -> {
                 log.error("Error body: {}", ((WebClientResponseException.BadRequest) ex).getResponseBodyAsString());
@@ -56,12 +55,8 @@ public class StreamService {
         }
     }
 
-    private void processTweet(String tweet) {
-        log.debug(tweet);
-    }
-
     public ServiceResponse stopTwitterStreaming() {
-        if (isStreamingStarted()) {
+        if (STREAM_CLOSED != getStreamStatus()) {
             openStream.dispose();
             openStream = null;
             return new ServiceResponse(ResponseCodeEnum.SUC_STREAM_STOPPED);
@@ -70,11 +65,13 @@ public class StreamService {
         }
     }
 
-    public boolean isStreamingStarted() {
-        if (openStream != null) {
-            return true;
+    public int getStreamStatus() {
+        if (openStream == null) {
+            return STREAM_CLOSED;
+        } else if (openStream.isDisposed()) {
+            return STREAM_INTERRUPTED;
         } else {
-            return false;
+            return STREAM_OPENED;
         }
     }
 
@@ -83,8 +80,9 @@ public class StreamService {
      * Si se escribe "OR" corresponde a un OR. Ej: "snow OR day".
      * Se puede utilizar parentesis para agrupar.
      * Para usar la negación se utiliza "-" delante del keyword. Ej: -is:retweet (solo tweets originales, excluye retweets).
-     *
+     * <p>
      * 512 characters long
+     *
      * @return
      */
     public Mono<ServiceResponse> createStreamingRules(Rule rule) {
@@ -95,14 +93,14 @@ public class StreamService {
         Mono<RulesResponse> apiResponse = twitterRestConnector.createStreamingRules(rulesRequest);
         return apiResponse.map(response -> {
             log.debug("Create Rule Twitter Response: {}", response);
-            if(response.getMeta().getSummary().getNot_created() > 0 && !response.getErrors().isEmpty()) {
+            if (response.getMeta().getSummary().getNot_created() > 0 && !response.getErrors().isEmpty()) {
                 String details;
-                if(response.getErrors().get(0).getDetails().isEmpty()) {
+                if (response.getErrors().get(0).getDetails().isEmpty()) {
                     details = response.getErrors().get(0).getTitle();
                 } else {
                     details = response.getErrors().get(0).getDetails().toString();
                 }
-                return new ServiceResponse(ResponseCodeEnum.CREATE_RULE_ERROR,details);
+                return new ServiceResponse(ResponseCodeEnum.CREATE_RULE_ERROR, details);
             } else {
                 return new ServiceResponse(ResponseCodeEnum.CREATE_RULE_SUCCESS);
             }
@@ -111,6 +109,7 @@ public class StreamService {
 
     /**
      * Delete streaming rules
+     *
      * @param ruleId
      * @return
      */
@@ -124,10 +123,22 @@ public class StreamService {
 
     /**
      * Get created streaming rules
+     *
      * @return
      */
     public Mono<RulesResponse> getStreamingRules() {
         return twitterRestConnector.getCreatedRules();
     }
 
+    /**
+     * Scheduled Task that check every 5 minutes if the streaming was interrupted by a server error.
+     * If the streaming was interrupted this task will start a new one.
+     */
+    @Scheduled(fixedDelay = 300000)
+    private void streamingRetryScheduledTask() {
+        if(STREAM_INTERRUPTED == getStreamStatus()) {
+            log.debug("Executing Streaming Retry...");
+            startTwitterStreaming();
+        }
+    }
 }

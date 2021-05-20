@@ -2,6 +2,7 @@ package com.rgallego.connector.connector;
 
 import com.rgallego.connector.connector.bean.RulesRequest;
 import com.rgallego.connector.connector.bean.RulesResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import javax.annotation.PostConstruct;
  * Twitter API v2 Rest Connector
  */
 @Service
+@Slf4j
 public class TwitterRestConnector {
 
     private WebClient webClient;

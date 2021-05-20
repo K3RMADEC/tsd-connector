@@ -10,8 +10,6 @@ public enum ResponseCodeEnum {
     SUC_OPEN_STREAM(1, "Stream started successfully"),
     ERR_STREAM_NOT_EXIST(-2, "There is currently no open stream"),
     SUC_STREAM_STOPPED(2, "Stream stopped successfully"),
-    STREAM_STATUS_STARTED(3, "Stream is open"),
-    STREAM_STATUS_STOPPED(-3, "Stream is closed"),
     CREATE_RULE_SUCCESS(4, "Rule successfully created"),
     CREATE_RULE_ERROR(-4, "Error creating new rule.");
 
