@@ -1,7 +1,6 @@
 package com.rgallego.connector.controller;
 
 import com.rgallego.connector.connector.bean.Rule;
-import com.rgallego.connector.connector.bean.RulesRequest;
 import com.rgallego.connector.connector.bean.RulesResponse;
 import com.rgallego.connector.service.ServiceResponse;
 import com.rgallego.connector.service.StreamService;
@@ -16,7 +15,6 @@ import reactor.core.publisher.Mono;
  * Stream Controller
  * Allows start and stop the streaming
  */
-
 @RestController
 @RequestMapping("/stream")
 @Slf4j
@@ -69,7 +67,7 @@ public class StreamController {
     @PostMapping("/createRule")
     public Mono<ResponseEntity> createRule(@RequestBody Rule rule) {
         log.info("Create Rule Request");
-        Mono<ServiceResponse> response = streamService.createStreamingRules(rule);
+        Mono<ServiceResponse> response = streamService.createStreamingRule(rule);
         return response.map(r -> {
             log.info("Create Rule Response: {}", r);
             if (r.getCode() < 0) {
@@ -83,7 +81,7 @@ public class StreamController {
     @DeleteMapping("/deleteRule")
     public Mono<RulesResponse> deleteRule(@RequestParam String ruleId) {
         log.info("Delete Rule Request");
-        Mono<RulesResponse> response = streamService.deleteStreamingRules(ruleId);
+        Mono<RulesResponse> response = streamService.deleteStreamingRule(ruleId);
         log.info("Delete Rule Response: {}", response);
         return response;
     }

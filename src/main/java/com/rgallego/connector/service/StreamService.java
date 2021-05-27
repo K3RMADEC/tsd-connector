@@ -39,14 +39,7 @@ public class StreamService {
         if (STREAM_OPENED == getStreamStatus()) {
             return new ServiceResponse(ResponseCodeEnum.ERR_ALREADY_OPEN_STREAM);
         } else {
-            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-//        https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/get-tweets-search-stream
-            params.add("expansions", "author_id,geo.place_id");
-            params.add("tweet.fields", "created_at,context_annotations,entities,geo");
-            params.add("user.fields", "location");
-            params.add("place.fields", "full_name,country,geo,name,place_type");
-
-            Flux<String> tweetsFlux = twitterRestConnector.getSearchStreaming(params);
+            Flux<String> tweetsFlux = twitterRestConnector.getSearchStreaming();
             log.debug("Starting streaming...");
             openStream = tweetsFlux.subscribe(kafkaProducer::send, ex -> {
                 log.error("Error body: {}", ((WebClientResponseException.BadRequest) ex).getResponseBodyAsString());
@@ -75,17 +68,7 @@ public class StreamService {
         }
     }
 
-    /**
-     * Operadores sucesivos separados por espacios son AND. Ej: "snow day" (snow AND day)
-     * Si se escribe "OR" corresponde a un OR. Ej: "snow OR day".
-     * Se puede utilizar parentesis para agrupar.
-     * Para usar la negación se utiliza "-" delante del keyword. Ej: -is:retweet (solo tweets originales, excluye retweets).
-     * <p>
-     * 512 characters long
-     *
-     * @return
-     */
-    public Mono<ServiceResponse> createStreamingRules(Rule rule) {
+    public Mono<ServiceResponse> createStreamingRule(Rule rule) {
         List<Rule> rules = new ArrayList<>();
         rules.add(rule);
         RulesRequest rulesRequest = new RulesRequest();
@@ -113,7 +96,7 @@ public class StreamService {
      * @param ruleId
      * @return
      */
-    public Mono<RulesResponse> deleteStreamingRules(String ruleId) {
+    public Mono<RulesResponse> deleteStreamingRule(String ruleId) {
         List<String> ruleIdList = new ArrayList<>();
         ruleIdList.add(ruleId);
         RulesRequest rulesRequest = new RulesRequest();

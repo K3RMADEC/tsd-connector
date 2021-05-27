@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -33,7 +34,7 @@ public class TwitterRestConnector {
     }
 
     @PostConstruct
-    public void init() { //todo se puede crear un webclient custom para logear request y body. (Probar con subscribe como el flux)
+    public void init() {
         // Base URL and Authorization
         webClient = WebClient.builder()
                 .baseUrl("https://api.twitter.com")
@@ -44,10 +45,14 @@ public class TwitterRestConnector {
     /**
      * Get Tweet Streaming with the specified fields
      *
-     * @param params Fields that the API will return
      * @return {@link Flux} Flux Object to get the tweets
      */
-    public Flux<String> getSearchStreaming(MultiValueMap<String, String> params) {
+    public Flux<String> getSearchStreaming() {
+        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+//        https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/get-tweets-search-stream
+        params.add("expansions", "author_id,geo.place_id");
+        params.add("tweet.fields", "created_at,geo");
+        params.add("place.fields", "full_name,country,geo,name,place_type");
         return this.webClient.method(HttpMethod.GET)
                 .uri(uriBuilder -> uriBuilder
                         .path("/2/tweets/search/stream")
